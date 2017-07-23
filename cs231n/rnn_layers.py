@@ -285,7 +285,29 @@ def lstm_step_forward(x, prev_h, prev_c, Wx, Wh, b):
     # TODO: Implement the forward pass for a single timestep of an LSTM.        #
     # You may want to use the numerically stable sigmoid implementation above.  #
     #############################################################################
-    pass
+
+    ##get dimensions
+    N, D, H = prev_h.shape[0], Wx.shape[0], prev_h.shape[1]
+
+    #compute activation matrix, dimensions are (N, 4H)
+    act_vec = np.dot( x, Wx ) + np.dot( prev_h, Wh ) + b
+
+    ##slice into activation matrix to get activation vectors
+    ai, af, ao, ag = act_vec[:,0:H], act_vec[:,H:2*H], act_vec[:,2*H:3*H], act_vec[:,3*H:4*H]
+
+    ##compute gates
+
+    i = sigmoid( ai )
+    f = sigmoid( af )
+    o = sigmoid( ao )
+    g = np.tanh( ag )
+
+    next_c = f * prev_c + i * g
+    squashed = np.tanh( next_c )
+    next_h = o * squashed
+
+    cache = i, f, o, g, prev_c, prev_h, x, squashed, Wh, Wx
+
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -317,7 +339,39 @@ def lstm_step_backward(dnext_h, dnext_c, cache):
     # HINT: For sigmoid and tanh you can compute local derivatives in terms of  #
     # the output value from the nonlinearity.                                   #
     #############################################################################
-    pass
+    i, f, o, g, prev_c, prev_h, x, squashed, Wh, Wx = cache
+    N, H, D = dnext_h.shape[0], dnext_h.shape[1], x.shape[1]
+
+    dsquashed = o * dnext_h
+    dadd_c = (1 - (squashed * squashed))* dsquashed
+    dnext_c += dadd_c
+
+    dg_next = i * dnext_c
+    df_next = dnext_c * prev_c
+    di_next = g * dnext_c
+    do_next = squashed * dnext_h
+    dprev_c = f * dnext_c
+
+    ##backprop through non-linearities
+    dg = ( 1 - (g*g)) * dg_next
+    df = f*(1-f) * df_next
+    di = i * (1 - i) * di_next
+    do = o * (1 - o) * do_next
+
+    ##put them back into the activation matrix
+    dact_vec = np.zeros( shape=( N, 4*H) )
+
+    dact_vec[:,0:H] = di
+    dact_vec[:,H:2*H] = df
+    dact_vec[:,2*H:3*H] = do
+    dact_vec[:,3*H:4*H] = dg
+
+    db = np.sum( dact_vec, axis=0)
+    dWx = np.dot( x.T, dact_vec)
+    dWh = np.dot( prev_h.T, dact_vec )
+    dprev_h = np.dot( dact_vec, Wh.T )
+    dx = np.dot( dact_vec, Wx.T )
+
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -352,7 +406,21 @@ def lstm_forward(x, h0, Wx, Wh, b):
     # TODO: Implement the forward pass for an LSTM over an entire timeseries.   #
     # You should use the lstm_step_forward function that you just defined.      #
     #############################################################################
-    pass
+    N, T, D, H = x.shape[0], x.shape[1], x.shape[2], h0.shape[1]
+
+    #into dims (T, N, D)
+    x = x.transpose( 1, 0, 2 )
+    h = np.zeros( shape=(T, N, H ))
+    cache = {}
+
+    for t in range( 0, T ):
+        if t == 0:
+            cur_h = h0
+            cur_c = np.zeros( shape=(cur_h.shape))
+        cur_h, cur_c, cache[t] = lstm_step_forward(x[t], cur_h, cur_c, Wx, Wh, b)
+        h[t] = cur_h
+
+    h = h.transpose( 1, 0, 2 )
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -380,7 +448,33 @@ def lstm_backward(dh, cache):
     # TODO: Implement the backward pass for an LSTM over an entire timeseries.  #
     # You should use the lstm_step_backward function that you just defined.     #
     #############################################################################
-    pass
+
+    dim_x = cache[0][6]
+    N, T, H, D = dh.shape[0], dh.shape[1], dh.shape[2], dim_x.shape[1]
+
+    dx = np.zeros( shape=(T, N, D))
+    dh0 = np.zeros( shape=(N, H))
+    dWx = np.zeros( shape=(D, 4*H))
+    dWh = np.zeros( shape=(H, 4*H))
+    db = np.zeros( shape=(4*H,))
+    dh = dh.transpose( 1, 0, 2)
+
+    for t in range(T - 1, -1, -1):
+        if t == (T - 1):
+            dprev_h = np.zeros(shape=(dh[t].shape))
+            dprev_c = np.zeros( shape=(dh[t].shape))
+        cur_cache = cache[t]
+        cur_dx, dprev_h, dprev_c, cur_dWx, cur_dWh, cur_db = lstm_step_backward(dh[t] + dprev_h, dprev_c, cur_cache)
+        dx[t] = cur_dx
+        dWx += cur_dWx
+        dWh += cur_dWh
+        db += cur_db
+        if t == 0:
+            dh0 = dprev_h
+
+    dx = dx.transpose(1, 0, 2)
+
+
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
