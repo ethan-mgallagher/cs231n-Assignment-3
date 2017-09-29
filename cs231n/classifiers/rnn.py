@@ -241,7 +241,7 @@ class CaptioningRNN(object):
 
         for t in range( 0, max_length ):
             #(1) embed previous word
-            x, _ = W_embed[cur_capts , : ]
+            x, _ = word_embedding_forward(cur_capts, W_embed)
             #(2) rnn step
             if self.cell_type == 'rnn':
                 cur_h, _ = rnn_step_forward( x, cur_h, Wx, Wh, b )
