@@ -81,3 +81,39 @@ def adam(x, dx, config=None):
     next_x = x
 
     return next_x, config
+
+def rmsprop(x, dx, config=None):
+  """
+  Uses the RMSProp update rule, which uses a moving average of squared gradient
+  values to set adaptive per-parameter learning rates.
+
+  config format:
+  - learning_rate: Scalar learning rate.
+  - decay_rate: Scalar between 0 and 1 giving the decay rate for the squared
+    gradient cache.
+  - epsilon: Small scalar used for smoothing to avoid dividing by zero.
+  - cache: Moving average of second moments of gradients.
+  """
+  if config is None: config = {}
+  config.setdefault('learning_rate', 1e-2)
+  config.setdefault('decay_rate', 0.99)
+  config.setdefault('epsilon', 1e-8)
+  config.setdefault('cache', np.zeros_like(x))
+
+  next_x = None
+  #############################################################################
+  # TODO: Implement the RMSprop update formula, storing the next value of x   #
+  # in the next_x variable. Don't forget to update cache value stored in      #
+  # config['cache'].                                                          #
+  #############################################################################
+
+  config['cache'] = config['decay_rate'] * config['cache'] + (1 - config['decay_rate']) * dx ** 2
+  next_x = x
+  next_x -= config['learning_rate'] * dx / (np.sqrt(config['cache']) + config['epsilon'])
+
+  #############################################################################
+  #                             END OF YOUR CODE                              #
+  #############################################################################
+
+  return next_x, config
+

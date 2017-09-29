@@ -234,25 +234,27 @@ class CaptioningRNN(object):
         ###########################################################################
 
         ##input those image features
-        h0 = np.dot( features, W_proj ) + b_proj
+        cur_h = np.dot( features, W_proj ) + b_proj
+        cur_c = np.zeros_like( cur_h )
+        ##generate captions vector of start tokens
+        cur_capts = np.full( N, self._start)
 
         for t in range( 0, max_length ):
-            if t == 0:
-                prev_word = self._start
-                h = h0
-                c = np.zeros( shape=( h0.shape ))
             #(1) embed previous word
-            x, _ = word_embedding_forward( prev_word, W_embed )
+            x, _ = W_embed[cur_capts , : ]
             #(2) rnn step
             if self.cell_type == 'rnn':
-                h, _ = rnn_step_forward( x, h, Wx, Wh, b )
+                cur_h, _ = rnn_step_forward( x, cur_h, Wx, Wh, b )
+            #lstm step
             if self.cell_type == 'lstm':
-                h, c, _ = lstm_step_forward(x, h, c, Wx, Wh, b)
+                cur_h, cur_c, _ = lstm_step_forward(x, cur_h, cur_c, Wx, Wh, b)
             #(3) learned affine transformation
-            vocab = np.dot( h, W_vocab ) + b_vocab
+            vocab = np.dot( cur_h, W_vocab ) + b_vocab
             #(4) note index of max, not max
             max_vocab = np.argmax( vocab, axis=1 )
             captions[:,t] = max_vocab
+            ##get current word
+            cur_capts = captions[:, t]
 
         ############################################################################
         #                             END OF YOUR CODE                             #
